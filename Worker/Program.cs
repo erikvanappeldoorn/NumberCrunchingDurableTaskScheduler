@@ -43,20 +43,19 @@ logger.LogInformation("Using endpoint: {Endpoint}", endpoint);
 logger.LogInformation("Using task hub: {TaskHubName}", taskHubName);
 logger.LogInformation("Host address: {HostAddress}", hostAddress);
 logger.LogInformation("Connection string: {ConnectionString}", connectionString);
-logger.LogInformation("This worker implements a Fan-Out Fan-In pattern for parallel processing of work items");
+logger.LogInformation("This worker uses parallel processing to find prime numbers");
 
 builder.Services.AddDurableTaskWorker()
     .AddTasks(registry =>
     {
-        registry.AddOrchestrator<ParallelProcessingOrchestration>();
-        registry.AddActivity<ProcessWorkItemActivity>();
-        registry.AddActivity<AggregateResultsActivity>();
+        registry.AddOrchestrator<PrimesOrchestration>();
+        registry.AddActivity<CalculatePrimesActivity>();
     })
     .UseDurableTaskScheduler(connectionString);
 
 IHost host = builder.Build();
 logger = host.Services.GetRequiredService<ILogger<Program>>();
-logger.LogInformation("Starting Fan-Out Fan-In Pattern - Parallel Processing Worker");
+logger.LogInformation("Starting Parallel Processing Worker");
 
 await host.StartAsync();
 logger.LogInformation("Worker started. Press any key to stop...");
