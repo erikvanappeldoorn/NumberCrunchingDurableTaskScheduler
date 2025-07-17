@@ -2,7 +2,7 @@ using Microsoft.DurableTask;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace FanOutFanIn;
+namespace NumberCrunching.Worker;
 
 [DurableTask]
 public class ParallelProcessingOrchestration : TaskOrchestrator<List<string>, Dictionary<string, int>>

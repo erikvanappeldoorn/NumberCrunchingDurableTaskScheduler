@@ -3,7 +3,7 @@ using Microsoft.DurableTask.Worker.AzureManaged;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using FanOutFanIn;
+using NumberCrunching.Worker;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 builder.Logging.AddConsole();

@@ -1,7 +1,7 @@
 using Microsoft.DurableTask;
 using Microsoft.Extensions.Logging;
 
-namespace FanOutFanIn;
+namespace NumberCrunching.Worker;
 
 [DurableTask]
 public class ProcessWorkItemActivity : TaskActivity<string, Dictionary<string, int>>
