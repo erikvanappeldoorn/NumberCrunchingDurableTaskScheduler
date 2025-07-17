@@ -11,7 +11,7 @@ using ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
 });
 
 ILogger<Program> logger = loggerFactory.CreateLogger<Program>();
-logger.LogInformation("Starting Fan-Out Fan-In Pattern - Parallel Processing Client");
+logger.LogInformation("Starting Parallel Processing Client");
 
 string endpoint = Environment.GetEnvironmentVariable("ENDPOINT") ?? "http://localhost:8080";
 string taskHubName = Environment.GetEnvironmentVariable("TASKHUB") ?? "default";
@@ -40,7 +40,7 @@ logger.LogInformation("Using endpoint: {Endpoint}", endpoint);
 logger.LogInformation("Using task hub: {TaskHubName}", taskHubName);
 logger.LogInformation("Host address: {HostAddress}", hostAddress);
 logger.LogInformation("Connection string: {ConnectionString}", connectionString);
-logger.LogInformation("This client submits a list of work items for parallel processing");
+logger.LogInformation("This client starts the parallel processing of prime calculations");
 
 ServiceCollection services = new ServiceCollection();
 services.AddLogging(builder => builder.AddConsole());
@@ -53,19 +53,12 @@ services.AddDurableTaskClient(options =>
 ServiceProvider serviceProvider = services.BuildServiceProvider();
 DurableTaskClient client = serviceProvider.GetRequiredService<DurableTaskClient>();
 
-List<string> workItems = new List<string>
-{
-    "Task1",
-    "Task2",
-    "Task3",
-    "LongerTask4",
-    "VeryLongTask5"
-};
+int max = 50_000_000;
+byte parallel = 50;
 
-logger.LogInformation("Starting parallel processing orchestration with {Count} work items", workItems.Count);
-logger.LogInformation("Work items: {WorkItems}", JsonSerializer.Serialize(workItems));
+logger.LogInformation("Starting finding number of primes in range 1-{max}", max);
 
-string instanceId = await client.ScheduleNewOrchestrationInstanceAsync("ParallelProcessingOrchestration", workItems);
+string instanceId = await client.ScheduleNewOrchestrationInstanceAsync("PrimesOrchestration", (max, parallel));
 
 logger.LogInformation("Started orchestration with ID: {InstanceId}", instanceId);
 logger.LogInformation("Waiting for orchestration to complete...");
@@ -78,23 +71,15 @@ logger.LogInformation("Orchestration completed with status: {Status}", instance.
 
 if (instance.RuntimeStatus == OrchestrationRuntimeStatus.Completed)
 {
-    Dictionary<string, int>? results = instance.ReadOutputAs<Dictionary<string, int>>();
-    logger.LogInformation("Processing results:");
-    if (results != null)
-    {
-        foreach (KeyValuePair<string, int> result in results)
-        {
-            logger.LogInformation("Work item: {Item}, Result: {Result}", result.Key, result.Value);
-        }
-        
-        logger.LogInformation("Total items processed: {Count}", results.Count);
-    }
-    else
-    {
-        logger.LogWarning("No results were returned from the orchestration.");
-    }
+    int sum = instance.ReadOutputAs<int>();
+    logger.LogInformation("READY: {sum} primes found", sum);
+    
+    logger.LogError("Orchestration completed");
 }
 else if (instance.RuntimeStatus == OrchestrationRuntimeStatus.Failed)
 {
     logger.LogError("Orchestration failed: {ErrorMessage}", instance.FailureDetails?.ErrorMessage);
 }
+
+logger.LogInformation("Client ready. Press any key to stop...");
+Console.ReadKey(); 

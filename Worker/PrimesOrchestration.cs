@@ -8,13 +8,6 @@ namespace NumberCrunching.Worker;
 [DurableTask]
 public class PrimesOrchestration : TaskOrchestrator< (int  max, byte parallel), int>
 {
-    private readonly ILogger<PrimesOrchestration> _logger;
-
-    public PrimesOrchestration(ILogger<PrimesOrchestration> logger)
-    {
-        _logger = logger;
-    }
-    
     public override async Task<int> RunAsync(TaskOrchestrationContext context, (int  max, byte parallel) input)
     {
         var cruncher = new PrimeCruncher();
@@ -24,15 +17,12 @@ public class PrimesOrchestration : TaskOrchestrator< (int  max, byte parallel), 
 
         foreach (var boundary in boundaries)
         {
-            processingTasks.Add(context.CallActivityAsync<int>("CalculatePrimes", boundary));   
+            processingTasks.Add(context.CallActivityAsync<int>(nameof(CalculatePrimesActivity), boundary));   
         }
         
         await Task.WhenAll(processingTasks);
 
         int total = processingTasks.Sum(task => task.Result);
-        
-        _logger.LogInformation("READY: {total} primes found in the range 1 - {max}", total, input.max); 
-        
         return total;
     }
 }
