@@ -63,31 +63,30 @@ Local development with a deployed scheduler:
     ```
 
     ```bash
-    az group create --name my-resource-group --location <location>
+    az group create --name erikito-dts --location northeurope
     ```
 
 1. Create a durable task scheduler resource:
 
     ```bash
     az durabletask scheduler create \
-        --resource-group my-resource-group \
-        --name my-scheduler \
+        --resource-group erikito-dts \
+        --name erikito-dts \
         --ip-allowlist '["0.0.0.0/0"]' \
         --sku-name "Dedicated" \
-        --sku-capacity 1 \
-        --tags "{'myattribute':'myvalue'}"
+        --sku-capacity 1
     ```
 
 1. Create a task hub within the scheduler resource:
 
     ```bash
     az durabletask taskhub create \
-        --resource-group my-resource-group \
-        --scheduler-name my-scheduler \
-        --name "my-taskhub"
+        --resource-group erikito-dts \
+        --scheduler-name erikito-dts \
+        --name "default"
     ```
 
-1. Grant the current user permission to connect to the `my-taskhub` task hub:
+1. Grant the current user permission to connect to the `default` task hub:
 
     ```bash
     subscriptionId=$(az account show --query "id" -o tsv)
@@ -96,7 +95,7 @@ Local development with a deployed scheduler:
     az role assignment create \
         --assignee $loggedInUser \
         --role "Durable Task Data Contributor" \
-        --scope "/subscriptions/$subscriptionId/resourceGroups/my-resource-group/providers/Microsoft.DurableTask/schedulers/my-scheduler/taskHubs/my-taskhub"
+        --scope "/subscriptions/$subscriptionId/resourceGroups/erikito-dts/providers/Microsoft.DurableTask/schedulers/erikito-dts/taskHubs/default"
     ```
 
 ## Authentication
@@ -127,12 +126,12 @@ Once you have set up either the emulator or deployed scheduler, follow these ste
 1.  If you're using a deployed scheduler, you need to set Environment Variables:
     ```bash
     export ENDPOINT=$(az durabletask scheduler show \
-        --resource-group my-resource-group \
-        --name my-scheduler \
+        --resource-group erikito-dts \
+        --name  erikito-dts \
         --query "properties.endpoint" \
         --output tsv)
 
-    export TASKHUB="my-taskhub"
+    export TASKHUB="default"
     ```
 
 1. Start the worker in a terminal:
