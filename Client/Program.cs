@@ -54,7 +54,7 @@ ServiceProvider serviceProvider = services.BuildServiceProvider();
 DurableTaskClient client = serviceProvider.GetRequiredService<DurableTaskClient>();
 
 int max = 50_000_000;
-byte parallel = 50;
+byte parallel = 20;
 
 logger.LogInformation("Starting finding number of primes in range 1-{max}", max);
 

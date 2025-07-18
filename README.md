@@ -1,16 +1,20 @@
-# Fan-Out Fan-In Pattern
+# Number Crunching with the Durable Task Scheduler
 
-## Description of the Sample
+## Description of the Demo
 
-This sample demonstrates the Fan-Out Fan-In pattern with the Azure Durable Task Scheduler using the .NET SDK. The Fan-Out Fan-In pattern represents a way to execute multiple operations in parallel and then aggregate the results, making it ideal for parallelized data processing scenarios.
+This demo demonstrates parallel processing (Fan-In/Fan-Out) on the Durable Task Scheduler using the .NET SDK. The Fan-Out Fan-In pattern represents a way to execute multiple operations in parallel and then aggregate the results, making it ideal for parallelized data processing scenarios.
+You can run this demo on Azure with your own Azure Subscription or in a local environment using the Durable Task Scheduler emulator in Docker.
+
 
 In this sample:
-1. The orchestrator takes a list of work items as input
-2. It fans out by creating a separate task for each work item using `ProcessWorkItemActivity` 
-3. All these tasks execute in parallel
-4. It waits for all tasks to complete using `Task.WhenAll`
-5. It fans in by aggregating all individual results using `AggregateResultsActivity`
-6. The final aggregated result is returned to the client
+1. The orchestrator takes a max number (50.000.000) and a degree of parallism (20)
+2. It then creates work item ranges e.g. (1 - 2.500.000), (2.500.001 - 5.000.000) etc..  
+3. It fans out by creating a separate task for each work item using `CalculatePrimeActivity` 
+4. Each task will calculate the number of primes that can be found in its work item.
+5. All these tasks are executed in parallel
+6. It waits for all tasks to complete using `Task.WhenAll`
+7. It fans in by aggregating all individual results using `processingTasks.Sum(task => task.Result);`
+8. The final aggregated result is returned to the client
 
 This pattern is useful for:
 - Processing large datasets in parallel for improved throughput
@@ -20,7 +24,7 @@ This pattern is useful for:
 
 ## Prerequisites
 
-1. [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+1. [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
 2. [Docker](https://www.docker.com/products/docker-desktop/) (for running the emulator) installed
 3. [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) (if using a deployed Durable Task Scheduler)
 
@@ -90,7 +94,7 @@ Local development with a deployed scheduler:
 
     ```bash
     subscriptionId=$(az account show --query "id" -o tsv)
-    loggedInUser=$(az account show --query "user.name" -o tsv)
+    loggedInUser=$(az account show --query "user.objectId" -o tsv)
 
     az role assignment create \
         --assignee $loggedInUser \
@@ -119,7 +123,7 @@ connectionString = $"Endpoint={schedulerEndpoint};TaskHub={taskHubName};Authenti
 connectionString = $"Endpoint={schedulerEndpoint};TaskHub={taskHubName};Authentication=DefaultAzure";
 ```
 
-## How to Run the Sample
+## How to Run the Demo
 
 Once you have set up either the emulator or deployed scheduler, follow these steps to run the sample:
 
@@ -136,7 +140,7 @@ Once you have set up either the emulator or deployed scheduler, follow these ste
 
 1. Start the worker in a terminal:
     ```bash
-    cd samples/durable-task-sdks/dotnet/FanOutFanIn/Worker
+    cd ./Worker
     dotnet run
     ```
     You should see output indicating the worker has started and registered the orchestration and activities.
@@ -145,7 +149,7 @@ Once you have set up either the emulator or deployed scheduler, follow these ste
     > **Note:** Remember to set the environment variables again if you're using a deployed scheduler. 
 
     ```bash
-    cd samples/durable-task-sdks/dotnet/FanOutFanIn/Client
+    cd ./Client
     dotnet run
     ```
 
@@ -159,7 +163,9 @@ Learn how to set up [identity-based authentication](https://learn.microsoft.com/
 
 The Worker project contains:
 
-- **ParallelProcessingOrchestration.cs**: Defines the orchestrator and activity functions in a single file
+- **PrimesOrchestration.cs**: Defines the orchestrator
+- **CalculatePrimesActivity.cs** Defines the Activity task
+- **PrimeCrunher.cs** Defines methods for the caluculation of primes and creating work item ranges 
 - **Program.cs**: Sets up the worker host with proper connection string handling
 
 #### Orchestration Implementation
@@ -167,44 +173,34 @@ The Worker project contains:
 The orchestration uses the fan-out fan-in pattern by creating parallel activity tasks and waiting for all to complete:
 
 ```csharp
-public override async Task<Dictionary<string, int>> RunAsync(TaskOrchestrationContext context, List<string> workItems)
-{
-    // Step 1: Fan-out by creating a task for each work item in parallel
-    List<Task<Dictionary<string, int>>> processingTasks = new List<Task<Dictionary<string, int>>>();
-    
-    foreach (string workItem in workItems)
-    {
-        // Create a task for each work item (fan-out)
-        Task<Dictionary<string, int>> task = context.CallActivityAsync<Dictionary<string, int>>(
-            nameof(ProcessWorkItemActivity), workItem);
-        processingTasks.Add(task);
-    }
-    
-    // Step 2: Wait for all parallel tasks to complete
-    Dictionary<string, int>[] results = await Task.WhenAll(processingTasks);
-    
-    // Step 3: Fan-in by aggregating all results
-    Dictionary<string, int> aggregatedResults = await context.CallActivityAsync<Dictionary<string, int>>(
-        nameof(AggregateResultsActivity), results);
-    
-    return aggregatedResults;
-}
+ public override async Task<int> RunAsync(TaskOrchestrationContext context, (int  max, byte parallel) input)
+ {
+     var cruncher = new PrimeCruncher();
+     var boundaries = cruncher.GetBoundaries(input.max, input.parallel);
+        
+     var processingTasks = new List<Task<int>>();
+
+     foreach (var boundary in boundaries)
+     {
+         processingTasks.Add(context.CallActivityAsync<int>(nameof(CalculatePrimesActivity), boundary));   
+     }
+        
+     await Task.WhenAll(processingTasks);
+
+     int total = processingTasks.Sum(task => task.Result);
+     return total;
+ }
 ```
 
-Each activity is implemented as a separate class decorated with the `[DurableTask]` attribute:
+The `CalculatePrimesActivity` is implemented as a separate class decorated with the `[DurableTask]` attribute:
 
 ```csharp
 [DurableTask]
-public class ProcessWorkItemActivity : TaskActivity<string, Dictionary<string, int>>
+public class CalculatePrimesActivity : TaskActivity<(int start, int end), int>
 {
     // Implementation processes a single work item
 }
 
-[DurableTask]
-public class AggregateResultsActivity : TaskActivity<Dictionary<string, int>[], Dictionary<string, int>>
-{
-    // Implementation aggregates individual results
-}
 ```
 
 The worker uses Microsoft.Extensions.Hosting for proper lifecycle management:
@@ -212,9 +208,8 @@ The worker uses Microsoft.Extensions.Hosting for proper lifecycle management:
 builder.Services.AddDurableTaskWorker()
     .AddTasks(registry =>
     {
-        registry.AddOrchestrator<ParallelProcessingOrchestration>();
-        registry.AddActivity<ProcessWorkItemActivity>();
-        registry.AddActivity<AggregateResultsActivity>();
+        registry.AddOrchestrator<PrimesOrchestration>();
+        registry.AddActivity<CalculatePrimesActivity>();
     })
     .UseDurableTaskScheduler(connectionString);
 ```
@@ -224,58 +219,38 @@ builder.Services.AddDurableTaskWorker()
 The Client project:
 
 - Uses the same connection string logic as the worker
-- Creates a list of work items to be processed in parallel
-- Schedules an orchestration instance with the list as input
+- Creates a max number and a degree of parallism to be processed in parallel
+- Schedules an orchestration instance with the input
 - Waits for the orchestration to complete and displays the aggregated results
 - Uses WaitForInstanceCompletionAsync for efficient polling
 
 ```csharp
-List<string> workItems = new List<string>
-{
-    "Task1",
-    "Task2",
-    "Task3",
-    "LongerTask4",
-    "VeryLongTask5"
-};
+int max = 50_000_000;
+byte parallel = 20;
 
-// Schedule the orchestration with the work items
-string instanceId = await client.ScheduleNewOrchestrationInstanceAsync(
-    "ParallelProcessingOrchestration", 
-    workItems);
+logger.LogInformation("Starting finding number of primes in range 1-{max}", max);
 
-// Wait for completion
-var instance = await client.WaitForInstanceCompletionAsync(
-    instanceId,
-    getInputsAndOutputs: true,
-    cts.Token);
+string instanceId = await client.ScheduleNewOrchestrationInstanceAsync("PrimesOrchestration", (max, parallel));
+
+logger.LogInformation("Started orchestration with ID: {InstanceId}", instanceId);
+logger.LogInformation("Waiting for orchestration to complete...");
+
+using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+OrchestrationMetadata instance = await client.WaitForInstanceCompletionAsync(instanceId, getInputsAndOutputs: true, cts.Token);
+
+logger.LogInformation("Orchestration completed with status: {Status}", instance.RuntimeStatus);
+
 ```
 
 ## Understanding the Output
 
 When you run the client, you should see:
-1. The client starting an orchestration with a list of work items
+1. The client starting an orchestration
 2. The worker processing each work item in parallel
 3. The worker aggregating all results
 4. The client displaying the final aggregated results from the completed orchestration
 
-Example output:
-```
-Starting Fan-Out Fan-In Pattern - Parallel Processing Client
-Using local emulator with no authentication
-Starting parallel processing orchestration with 5 work items
-Work items: ["Task1","Task2","Task3","LongerTask4","VeryLongTask5"]
-Started orchestration with ID: 7f8e9a6b-1c2d-3e4f-5a6b-7c8d9e0f1a2b
-Waiting for orchestration to complete...
-Orchestration completed with status: Completed
-Processing results:
-Work item: Task1, Result: 5
-Work item: Task2, Result: 5
-Work item: Task3, Result: 5
-Work item: LongerTask4, Result: 11
-Work item: VeryLongTask5, Result: 13
-Total items processed: 5
-```
 
 When you run the sample, you'll see output from both the worker and client processes:
 
